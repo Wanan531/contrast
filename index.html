@@ -108,12 +108,12 @@
           <span class="text-sm leading-none">📤</span><span class="hidden sm:inline">导出</span>
         </button>
         <input ref="fileInputRef" type="file" accept="application/json" class="hidden" @change="handleImportFile">
-        <button @click="openNewProductModal" class="btn-press bg-white text-navy font-bold text-xs sm:text-sm px-2.5 sm:px-3.5 py-2 rounded-lg hover:bg-white/90 flex items-center gap-1.5">
-          <span class="text-base leading-none">＋</span><span class="hidden sm:inline">新建商品</span>
+        <button @click="openNewProductModal" class="hidden md:flex btn-press bg-white text-navy font-bold text-sm px-3.5 py-2 rounded-lg hover:bg-white/90 items-center gap-1.5">
+          <span class="text-base leading-none">＋</span>新建商品
         </button>
       </div>
     </div>
-    <nav class="px-4 sm:px-6 flex items-center gap-1 overflow-x-auto pb-2">
+    <nav class="hidden md:flex px-4 sm:px-6 items-center gap-1 overflow-x-auto pb-2">
       <button v-for="t in navTabs" :key="t.id" @click="view = t.id"
         class="btn-press shrink-0 text-xs sm:text-sm font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5"
         :class="view === t.id ? 'nav-active' : 'nav-idle'">
@@ -124,12 +124,15 @@
     </nav>
   </header>
 
-  <div v-if="view === 'main'" class="flex-1 flex flex-col md:flex-row max-w-7xl w-full mx-auto md:gap-5 md:p-5">
+  <div v-if="view === 'main'" class="flex-1 flex flex-col md:flex-row max-w-7xl w-full mx-auto md:gap-5 md:p-5 pb-24 md:pb-5">
 
     <!-- ============ 左侧 / 顶部 商品列表 ============ -->
-    <aside class="md:w-72 shrink-0 md:sticky md:top-[118px] md:self-start">
+    <aside class="md:w-72 shrink-0 md:sticky md:top-[118px] md:self-start" :class="currentProduct ? 'hidden md:block' : 'block'">
       <div class="panel md:rounded-2xl px-3 py-3 md:py-4">
-        <p class="hidden md:block text-[11px] font-bold text-ink/35 tracking-[0.2em] uppercase px-2 mb-2">商品清单 · {{ products.length }}</p>
+        <div class="flex items-center justify-between px-2 mb-2">
+          <p class="text-[11px] font-bold text-ink/35 tracking-[0.2em] uppercase">商品清单 · {{ products.length }}</p>
+          <button @click="openNewProductModal" class="md:hidden btn-press text-navy font-bold text-xs flex items-center gap-1">＋ 新建</button>
+        </div>
 
         <!-- 搜索 + 排序 -->
         <div v-if="products.length" class="px-1 md:px-0 mb-2 space-y-2">
@@ -160,41 +163,50 @@
           <p class="text-xs text-ink/40 font-bold">没有符合条件的商品</p>
         </div>
 
-        <div v-else class="flex md:flex-col gap-2 overflow-x-auto md:overflow-visible pb-1 md:pb-0">
-          <button v-for="(p, idx) in filteredProducts" :key="p.id" @click="currentProductId = p.id"
+        <div v-else class="flex flex-col gap-2">
+          <div v-for="(p, idx) in filteredProducts" :key="p.id"
             :draggable="sortMode==='manual'"
             @dragstart="sortMode==='manual' && onProductDragStart(idx)"
             @dragover.prevent="sortMode==='manual' && (dragOverProductIndex = idx)"
             @drop.prevent="sortMode==='manual' && onProductDrop(idx)"
             @dragleave="dragOverProductIndex = null"
-            class="btn-press shrink-0 md:shrink text-left rounded-xl px-3 py-2.5 flex items-center justify-between gap-2 min-w-[160px] md:min-w-0"
+            class="rounded-xl flex items-stretch gap-1"
             :class="[p.id === currentProductId ? 'tab-active' : 'tab-idle bg-paper/0', dragOverProductIndex===idx ? 'drag-over' : '']">
-            <div class="min-w-0 flex items-center gap-1.5">
-              <span v-if="sortMode==='manual'" class="drag-handle shrink-0" :class="p.id === currentProductId ? 'text-white/50' : 'text-ink/25'">⠿</span>
-              <div class="min-w-0">
-                <p class="font-bold text-sm truncate">{{ p.name }}</p>
-                <p class="text-[11px] truncate" :class="p.id === currentProductId ? 'text-white/55' : 'text-ink/35'">
-                  <span v-if="p.category">{{ p.category }} · </span>{{ activeStores(p).length }} 家店 <span v-if="p.decidedStoreId"> · 已决策 ✓</span>
-                </p>
+            <button @click="currentProductId = p.id" class="btn-press flex-1 min-w-0 text-left px-3 py-3 md:py-2.5 flex items-center justify-between gap-2">
+              <div class="min-w-0 flex items-center gap-1.5">
+                <span v-if="sortMode==='manual'" class="drag-handle shrink-0 hidden md:inline" :class="p.id === currentProductId ? 'text-white/50' : 'text-ink/25'">⠿</span>
+                <div class="min-w-0">
+                  <p class="font-bold text-sm truncate">{{ p.name }}</p>
+                  <p class="text-[11px] truncate" :class="p.id === currentProductId ? 'text-white/55' : 'text-ink/35'">
+                    <span v-if="p.category">{{ p.category }} · </span>{{ activeStores(p).length }} 家店 <span v-if="p.decidedStoreId"> · 已决策 ✓</span>
+                  </p>
+                </div>
               </div>
+              <div class="flex items-center gap-1.5 shrink-0">
+                <span v-if="isReminderDue(p)" title="提醒到期">🔔</span>
+                <span v-if="p.decidedStoreId" class="text-sm">✅</span>
+                <span class="md:hidden" :class="p.id === currentProductId ? 'text-white/50' : 'text-ink/25'">›</span>
+              </div>
+            </button>
+            <div v-if="sortMode==='manual'" class="flex flex-col justify-center shrink-0 pr-1.5">
+              <button @click.stop="moveProduct(idx,-1)" :disabled="idx===0" class="btn-press text-xs leading-none px-1.5 py-1 disabled:opacity-20" :class="p.id === currentProductId ? 'text-white' : 'text-ink/50'">▲</button>
+              <button @click.stop="moveProduct(idx,1)" :disabled="idx===filteredProducts.length-1" class="btn-press text-xs leading-none px-1.5 py-1 disabled:opacity-20" :class="p.id === currentProductId ? 'text-white' : 'text-ink/50'">▼</button>
             </div>
-            <div class="flex items-center gap-1 shrink-0">
-              <span v-if="isReminderDue(p)" title="提醒到期">🔔</span>
-              <span v-if="p.decidedStoreId" class="text-sm">✅</span>
-            </div>
-          </button>
+          </div>
         </div>
       </div>
     </aside>
 
     <!-- ============ 主区域 ============ -->
-    <main class="flex-1 min-w-0 px-3 py-4 md:p-0 space-y-4">
+    <main class="flex-1 min-w-0 px-3 py-4 md:p-0 space-y-4" :class="currentProduct ? 'block' : 'hidden md:block'">
 
       <div v-if="!currentProduct" class="panel md:rounded-2xl p-12 text-center text-ink/35 font-bold">
         从左侧选择或新建一个商品，开始货比三家
       </div>
 
       <template v-else>
+        <button @click="currentProductId = null" class="md:hidden flex items-center gap-1 text-navy font-bold text-sm -mb-1">← 返回商品列表</button>
+
         <!-- 商品标题条 -->
         <div class="panel md:rounded-2xl px-5 py-4 flex items-center justify-between gap-3 flex-wrap">
           <div class="min-w-0">
@@ -212,13 +224,13 @@
             </p>
           </div>
           <div class="flex items-center gap-2 shrink-0 flex-wrap">
-            <button v-if="!currentProduct.decidedStoreId" @click="openReminderModal" class="btn-press bg-paper text-navy font-bold text-sm px-3 py-2 rounded-lg hover:bg-line/60 flex items-center gap-1.5">
-              ⏰<span class="hidden sm:inline">{{ currentProduct.reminderAt ? '修改提醒' : '设置提醒' }}</span>
+            <button v-if="!currentProduct.decidedStoreId" @click="openReminderModal" title="设置提醒" class="btn-press bg-paper text-navy font-bold text-sm w-9 h-9 md:w-auto md:px-3 md:py-2 rounded-lg hover:bg-line/60 flex items-center justify-center gap-1.5">
+              ⏰<span class="hidden md:inline">{{ currentProduct.reminderAt ? '修改提醒' : '设置提醒' }}</span>
             </button>
-            <button @click="showWeightPanel = !showWeightPanel" class="btn-press bg-paper text-navy font-bold text-sm px-3 py-2 rounded-lg hover:bg-line/60 flex items-center gap-1.5">
-              ⚖️<span class="hidden sm:inline">评分权重</span>
+            <button @click="showWeightPanel = !showWeightPanel" title="评分权重" class="btn-press bg-paper text-navy font-bold text-sm w-9 h-9 md:w-auto md:px-3 md:py-2 rounded-lg hover:bg-line/60 flex items-center justify-center gap-1.5">
+              ⚖️<span class="hidden md:inline">评分权重</span>
             </button>
-            <button @click="showNewStore = true; editingStoreId = null; Object.assign(storeForm, emptyStoreForm())" class="btn-press bg-navy text-white font-bold text-sm px-3.5 py-2 rounded-lg hover:bg-navy-light flex items-center gap-1.5">
+            <button @click="showNewStore = true; editingStoreId = null; Object.assign(storeForm, emptyStoreForm())" class="hidden md:flex btn-press bg-navy text-white font-bold text-sm px-3.5 py-2 rounded-lg hover:bg-navy-light items-center gap-1.5">
               <span class="text-base leading-none">＋</span>添加对比店铺
             </button>
             <button @click="deleteProduct(currentProduct.id)" class="text-ink/25 hover:text-rose text-xs font-bold px-2">删除商品</button>
@@ -254,7 +266,7 @@
         <transition name="pop">
           <div v-if="showNewStore" class="panel md:rounded-2xl p-5 border-2 border-navy/15">
             <p class="font-display font-bold text-navy mb-3">{{ editingStoreId ? '编辑店铺' : '添加对比店铺' }}</p>
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 mb-3">
               <div class="col-span-2 md:col-span-1">
                 <label class="text-[11px] font-bold text-ink/40 block mb-1">店铺名字</label>
                 <input v-model="storeForm.name" type="text" placeholder="例如：旗舰店"
@@ -282,7 +294,7 @@
             </div>
 
             <p class="text-[11px] font-bold text-ink/35 uppercase tracking-wide mb-1.5 mt-1">价格明细</p>
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 mb-3">
               <div>
                 <label class="text-[11px] font-bold text-ink/40 block mb-1">商品标价</label>
                 <input v-model.number="storeForm.price" type="number" min="0" step="0.01" placeholder="999"
@@ -306,7 +318,7 @@
             </div>
 
             <p class="text-[11px] font-bold text-ink/35 uppercase tracking-wide mb-1.5 mt-1">规格 <span class="font-normal normal-case text-ink/30">(用于跨规格换算单位价格，可留空)</span></p>
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 mb-3">
               <div>
                 <label class="text-[11px] font-bold text-ink/40 block mb-1">规格数量</label>
                 <input v-model.number="storeForm.specQty" type="number" min="0" step="0.01" placeholder="例如 500"
@@ -430,10 +442,21 @@
 
         <!-- 对比看板：移动端卡片 -->
         <div v-if="activeStores(currentProduct).length" class="md:hidden space-y-3">
+          <div class="flex items-center justify-between px-1">
+            <p class="text-[11px] text-ink/35 font-bold">默认按到手价从低到高</p>
+            <label class="text-[11px] text-ink/40 font-bold flex items-center gap-1.5">
+              <input type="checkbox" :checked="storeSortMode==='manual'" @change="storeSortMode = storeSortMode==='manual' ? 'price' : 'manual'">
+              手动排序
+            </label>
+          </div>
           <transition-group name="pop">
             <div v-for="(s, idx) in displayStores" :key="s.id"
               class="panel rounded-2xl p-4 relative"
               :class="currentProduct.decidedStoreId === s.id ? 'decided-ring' : ''">
+              <div v-if="storeSortMode==='manual'" class="flex gap-1 absolute right-3 top-3">
+                <button @click="moveStore(idx,-1)" :disabled="idx===0" class="btn-press bg-paper text-ink/50 text-xs w-7 h-7 rounded-lg disabled:opacity-20">▲</button>
+                <button @click="moveStore(idx,1)" :disabled="idx===displayStores.length-1" class="btn-press bg-paper text-ink/50 text-xs w-7 h-7 rounded-lg disabled:opacity-20">▼</button>
+              </div>
               <div class="flex items-start justify-between mb-2">
                 <div>
                   <p class="font-mono text-[11px] font-bold text-ink/30">NO.{{ String(idx+1).padStart(2,'0') }}</p>
@@ -488,10 +511,13 @@
         </div>
       </template>
     </main>
+
+    <button v-if="currentProduct" @click="showNewStore = true; editingStoreId = null; Object.assign(storeForm, emptyStoreForm())"
+      class="md:hidden btn-press fixed right-4 bottom-24 z-30 w-14 h-14 rounded-full bg-navy text-white text-2xl shadow-xl flex items-center justify-center">＋</button>
   </div>
 
   <!-- ============ 跨商品汇总 ============ -->
-  <div v-else-if="view === 'overview'" class="flex-1 max-w-7xl w-full mx-auto p-4 md:p-5 space-y-4">
+  <div v-else-if="view === 'overview'" class="flex-1 max-w-7xl w-full mx-auto p-4 md:p-5 pb-24 md:pb-5 space-y-4">
     <div class="panel rounded-2xl p-5">
       <h2 class="font-display font-bold text-xl text-navy mb-1">跨商品汇总</h2>
       <p class="text-xs text-ink/40 font-bold mb-4">同时看几个商品该买哪个 / 决策进度一目了然</p>
@@ -537,7 +563,7 @@
   </div>
 
   <!-- ============ 决策统计 ============ -->
-  <div v-else-if="view === 'stats'" class="flex-1 max-w-7xl w-full mx-auto p-4 md:p-5 space-y-4">
+  <div v-else-if="view === 'stats'" class="flex-1 max-w-7xl w-full mx-auto p-4 md:p-5 pb-24 md:pb-5 space-y-4">
     <div class="grid sm:grid-cols-3 gap-4">
       <div class="panel rounded-2xl p-5">
         <p class="text-[11px] font-bold text-ink/35 uppercase tracking-wide mb-1">已决策次数</p>
@@ -568,7 +594,7 @@
   </div>
 
   <!-- ============ 回收站 ============ -->
-  <div v-else-if="view === 'trash'" class="flex-1 max-w-7xl w-full mx-auto p-4 md:p-5 space-y-4">
+  <div v-else-if="view === 'trash'" class="flex-1 max-w-7xl w-full mx-auto p-4 md:p-5 pb-24 md:pb-5 space-y-4">
     <div class="panel rounded-2xl p-5">
       <div class="flex items-center justify-between mb-1">
         <h2 class="font-display font-bold text-xl text-navy">回收站</h2>
@@ -609,8 +635,9 @@
 
   <!-- 新建商品弹层 -->
   <transition name="fade">
-    <div v-if="showNewProduct" class="fixed inset-0 bg-ink/40 z-30 flex items-center justify-center p-4" @click.self="showNewProduct=false">
-      <div class="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+    <div v-if="showNewProduct" class="fixed inset-0 bg-ink/40 z-30 flex items-end sm:items-center justify-center p-0 sm:p-4" @click.self="showNewProduct=false">
+      <div class="bg-white rounded-t-3xl sm:rounded-2xl p-6 pb-8 sm:pb-6 w-full max-w-sm shadow-2xl">
+        <div class="w-10 h-1.5 bg-line rounded-full mx-auto mb-4 sm:hidden"></div>
         <h3 class="font-display font-bold text-lg text-navy mb-1">新建商品</h3>
         <p class="text-xs text-ink/40 font-bold mb-4">给想要货比三家的商品起个名字</p>
         <input v-model="newProductName" @keyup.enter="addProduct" type="text" placeholder="例如：人体工学椅" autofocus
@@ -637,8 +664,9 @@
 
   <!-- 决策原因弹层 -->
   <transition name="fade">
-    <div v-if="decideModal.show" class="fixed inset-0 bg-ink/40 z-30 flex items-center justify-center p-4" @click.self="decideModal.show=false">
-      <div class="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+    <div v-if="decideModal.show" class="fixed inset-0 bg-ink/40 z-30 flex items-end sm:items-center justify-center p-0 sm:p-4" @click.self="decideModal.show=false">
+      <div class="bg-white rounded-t-3xl sm:rounded-2xl p-6 pb-8 sm:pb-6 w-full max-w-sm shadow-2xl">
+        <div class="w-10 h-1.5 bg-line rounded-full mx-auto mb-4 sm:hidden"></div>
         <h3 class="font-display font-bold text-lg text-navy mb-1">确定购买</h3>
         <p class="text-xs text-ink/40 font-bold mb-4">记录一下决策理由，以后回顾更清楚为什么选它</p>
         <textarea v-model="decideModal.reason" rows="3" placeholder="例如：虽然贵一点，但送 5 年质保更放心（可留空）"
@@ -653,8 +681,9 @@
 
   <!-- 复查现价弹层 -->
   <transition name="fade">
-    <div v-if="priceCheckModal.show" class="fixed inset-0 bg-ink/40 z-30 flex items-center justify-center p-4" @click.self="priceCheckModal.show=false">
-      <div class="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+    <div v-if="priceCheckModal.show" class="fixed inset-0 bg-ink/40 z-30 flex items-end sm:items-center justify-center p-0 sm:p-4" @click.self="priceCheckModal.show=false">
+      <div class="bg-white rounded-t-3xl sm:rounded-2xl p-6 pb-8 sm:pb-6 w-full max-w-sm shadow-2xl">
+        <div class="w-10 h-1.5 bg-line rounded-full mx-auto mb-4 sm:hidden"></div>
         <h3 class="font-display font-bold text-lg text-navy mb-1">复查现价</h3>
         <p class="text-xs text-ink/40 font-bold mb-4">看看「{{ decidedStore?.name }}」现在的到手价是多少，和当时决策价对比一下</p>
         <input v-model.number="priceCheckModal.value" type="number" min="0" step="0.01" placeholder="现在的到手价"
@@ -669,8 +698,9 @@
 
   <!-- 提醒设置弹层 -->
   <transition name="fade">
-    <div v-if="reminderModal.show" class="fixed inset-0 bg-ink/40 z-30 flex items-center justify-center p-4" @click.self="reminderModal.show=false">
-      <div class="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+    <div v-if="reminderModal.show" class="fixed inset-0 bg-ink/40 z-30 flex items-end sm:items-center justify-center p-0 sm:p-4" @click.self="reminderModal.show=false">
+      <div class="bg-white rounded-t-3xl sm:rounded-2xl p-6 pb-8 sm:pb-6 w-full max-w-sm shadow-2xl">
+        <div class="w-10 h-1.5 bg-line rounded-full mx-auto mb-4 sm:hidden"></div>
         <h3 class="font-display font-bold text-lg text-navy mb-1">设置回来看看的提醒</h3>
         <p class="text-xs text-ink/40 font-bold mb-4">避免比价比一半就忘了，几天后再提醒你回来看这个商品</p>
         <div class="flex items-center gap-2 mb-4">
@@ -689,12 +719,25 @@
 
   <!-- toast -->
   <transition name="pop">
-    <div v-if="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-navy text-white font-bold px-5 py-2.5 rounded-full shadow-xl z-50 text-sm max-w-[90vw] text-center">
+    <div v-if="toast" class="fixed bottom-24 md:bottom-6 left-1/2 -translate-x-1/2 bg-navy text-white font-bold px-5 py-2.5 rounded-full shadow-xl z-50 text-sm max-w-[90vw] text-center">
       {{ toast }}
     </div>
   </transition>
 
-  <footer class="text-center text-xs text-ink/30 font-semibold py-6">
+  <!-- ============ 移动端底部导航 ============ -->
+  <nav class="md:hidden fixed bottom-0 inset-x-0 z-20 bg-white border-t border-line flex" :style="{ paddingBottom: 'env(safe-area-inset-bottom)' }">
+    <button v-for="t in navTabs" :key="t.id"
+      @click="t.id==='main' ? (view='main', currentProductId=null) : (view=t.id)"
+      class="btn-press flex-1 flex flex-col items-center justify-center gap-0.5 py-2 relative"
+      :class="view === t.id ? 'text-navy' : 'text-ink/35'">
+      <span class="text-lg leading-none">{{ t.icon }}</span>
+      <span class="text-[10px] font-bold">{{ t.label }}</span>
+      <span v-if="t.id==='trash' && trashCount" class="absolute top-1 right-[22%] bg-rose text-white text-[9px] font-bold rounded-full min-w-[15px] h-[15px] flex items-center justify-center px-0.5">{{ trashCount }}</span>
+      <span v-if="t.id==='main' && dueReminderCount" class="absolute top-1 right-[22%] bg-gold text-white text-[9px] font-bold rounded-full min-w-[15px] h-[15px] flex items-center justify-center px-0.5">{{ dueReminderCount }}</span>
+    </button>
+  </nav>
+
+  <footer class="hidden md:block text-center text-xs text-ink/30 font-semibold py-6">
     数据仅保存在本机浏览器中 · 可用右上角"导出"备份 · 货比三家选店决策助手
   </footer>
 </div>
@@ -1164,6 +1207,26 @@ createApp({
       });
       persist();
     }
+    // 触屏设备不支持原生拖拽，提供上移/下移按钮作为等效操作
+    function moveProduct(idx, dir){
+      const target = idx + dir;
+      const list = filteredProducts.value.slice();
+      if(target < 0 || target >= list.length) return;
+      [list[idx], list[target]] = [list[target], list[idx]];
+      list.forEach((p, i) => { p.order = i; });
+      persist();
+    }
+    function moveStore(idx, dir){
+      const target = idx + dir;
+      const list = displayStores.value.slice();
+      if(target < 0 || target >= list.length) return;
+      [list[idx], list[target]] = [list[target], list[idx]];
+      list.forEach((s, i) => {
+        const orig = currentProduct.value.stores.find(x => x.id === s.id);
+        if(orig) orig.order = i;
+      });
+      persist();
+    }
 
     // ---------- 跨商品汇总 ----------
     const overviewRows = computed(() => {
@@ -1312,8 +1375,8 @@ createApp({
       priceCheckModal, openPriceCheck, confirmPriceCheck,
       reminderModal, openReminderModal, confirmReminder, clearReminder, isReminderDue, dueReminderCount,
       showWeightPanel, weights, weightPct, resetWeights,
-      dragOverProductIndex, onProductDragStart, onProductDrop,
-      storeSortMode, dragOverStoreIndex, onStoreDragStart, onStoreDrop,
+      dragOverProductIndex, onProductDragStart, onProductDrop, moveProduct,
+      storeSortMode, dragOverStoreIndex, onStoreDragStart, onStoreDrop, moveStore,
       overviewRows, statsSummary,
       trashCount, trashedProducts, trashedStores, restoreProduct, purgeProduct, restoreStore, purgeStore, daysLeft,
       exportData, triggerImport, handleImportFile, fileInputRef,
