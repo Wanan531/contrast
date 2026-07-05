@@ -19,6 +19,7 @@
           line: '#E2E8F0',
           win: { DEFAULT:'#0E9F6E', 50:'#E7F8F1' },
           gold: { DEFAULT:'#C8930C', 50:'#FBF2DC' },
+          rose: { DEFAULT:'#C23B4E', 50:'#FCEBEE' },
         },
         fontFamily: {
           display: ['"Space Grotesk"', '"Noto Sans SC"', 'sans-serif'],
@@ -39,7 +40,6 @@
 
   .panel{ background:#FFFFFF; border:1px solid #E2E8F0; }
 
-  /* 闪烁标签：仅用于“价格最低” */
   .blink-badge{ animation: badge-pulse 1.8s ease-in-out infinite; }
   @keyframes badge-pulse{
     0%,100%{ box-shadow:0 0 0 0 rgba(14,159,110,0.45); }
@@ -66,6 +66,12 @@
 
   .decided-ring{ box-shadow: 0 0 0 2px #16243F inset; }
 
+  input[type="range"]{ -webkit-appearance:none; height:6px; border-radius:99px; background:#E2E8F0; }
+  input[type="range"]::-webkit-slider-thumb{ -webkit-appearance:none; width:16px; height:16px; border-radius:50%; background:#16243F; cursor:pointer; border:2px solid #fff; box-shadow:0 0 0 1px #16243F; }
+  input[type="range"]::-moz-range-thumb{ width:16px; height:16px; border-radius:50%; background:#16243F; cursor:pointer; border:2px solid #fff; }
+
+  .chip{ transition: all .12s ease; }
+
   @media (prefers-reduced-motion: reduce){
     *{ animation:none !important; transition:none !important; }
   }
@@ -77,38 +83,70 @@
 
   <!-- ============ 顶部栏 ============ -->
   <header class="bg-navy text-white px-4 sm:px-6 py-4 flex items-center justify-between sticky top-0 z-20 shadow-md shadow-navy/10">
-    <div class="flex items-center gap-2.5">
-      <span class="text-2xl">🛒</span>
-      <div>
+    <div class="flex items-center gap-2.5 min-w-0">
+      <span class="text-2xl shrink-0">🛒</span>
+      <div class="min-w-0">
         <h1 class="font-display font-bold text-lg sm:text-xl leading-none">货比三家</h1>
-        <p class="text-[11px] text-white/50 font-medium mt-0.5 tracking-wide">选店决策助手 · 理智消费每一笔</p>
+        <p class="text-[11px] text-white/50 font-medium mt-0.5 tracking-wide hidden sm:block">选店决策助手 · 理智消费每一笔</p>
       </div>
     </div>
-    <button @click="showNewProduct = true" class="btn-press bg-white text-navy font-bold text-sm px-3.5 py-2 rounded-lg hover:bg-white/90 flex items-center gap-1.5 shrink-0">
-      <span class="text-base leading-none">＋</span><span class="hidden sm:inline">新建商品</span>
-    </button>
+    <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
+      <button @click="triggerImport" title="导入数据" class="btn-press bg-white/10 hover:bg-white/20 text-white font-bold text-xs sm:text-sm px-2.5 sm:px-3 py-2 rounded-lg flex items-center gap-1">
+        <span class="text-sm leading-none">📥</span><span class="hidden sm:inline">导入</span>
+      </button>
+      <button @click="exportData" title="导出数据" class="btn-press bg-white/10 hover:bg-white/20 text-white font-bold text-xs sm:text-sm px-2.5 sm:px-3 py-2 rounded-lg flex items-center gap-1">
+        <span class="text-sm leading-none">📤</span><span class="hidden sm:inline">导出</span>
+      </button>
+      <input ref="fileInputRef" type="file" accept="application/json" class="hidden" @change="handleImportFile">
+      <button @click="showNewProduct = true" class="btn-press bg-white text-navy font-bold text-xs sm:text-sm px-2.5 sm:px-3.5 py-2 rounded-lg hover:bg-white/90 flex items-center gap-1.5">
+        <span class="text-base leading-none">＋</span><span class="hidden sm:inline">新建商品</span>
+      </button>
+    </div>
   </header>
 
   <div class="flex-1 flex flex-col md:flex-row max-w-7xl w-full mx-auto md:gap-5 md:p-5">
 
     <!-- ============ 左侧 / 顶部 商品列表 ============ -->
-    <aside class="md:w-64 shrink-0 md:sticky md:top-[78px] md:self-start">
+    <aside class="md:w-72 shrink-0 md:sticky md:top-[78px] md:self-start">
       <div class="panel md:rounded-2xl px-3 py-3 md:py-4">
         <p class="hidden md:block text-[11px] font-bold text-ink/35 tracking-[0.2em] uppercase px-2 mb-2">商品清单 · {{ products.length }}</p>
 
+        <!-- 搜索 + 排序 -->
+        <div v-if="products.length" class="px-1 md:px-0 mb-2 space-y-2">
+          <input v-model="searchQuery" type="text" placeholder="🔍 搜索商品名..."
+            class="w-full rounded-lg border border-line px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-navy/30 bg-paper">
+          <select v-model="sortMode" class="w-full rounded-lg border border-line px-2 py-1.5 text-xs font-bold text-ink/60 bg-paper focus:outline-none focus:ring-2 focus:ring-navy/30">
+            <option value="default">按创建顺序</option>
+            <option value="name">按名称排序</option>
+            <option value="decided">已决策优先</option>
+            <option value="undecided">未决策优先</option>
+          </select>
+          <div v-if="allCategories.length" class="flex flex-wrap gap-1.5">
+            <button @click="categoryFilter=''" class="chip text-[11px] font-bold px-2 py-1 rounded-full"
+              :class="categoryFilter==='' ? 'bg-navy text-white' : 'bg-paper text-ink/40 hover:bg-line/60'">全部</button>
+            <button v-for="c in allCategories" :key="c" @click="categoryFilter = c === categoryFilter ? '' : c"
+              class="chip text-[11px] font-bold px-2 py-1 rounded-full"
+              :class="categoryFilter===c ? 'bg-navy text-white' : 'bg-paper text-ink/40 hover:bg-line/60'">{{ c }}</button>
+          </div>
+        </div>
+
         <div v-if="!products.length" class="text-center py-8 px-2">
           <p class="text-3xl mb-2">🧐</p>
-          <p class="text-xs text-ink/40 font-bold">还没有想比价的商品<br>点右上角“新建商品”开始</p>
+          <p class="text-xs text-ink/40 font-bold">还没有想比价的商品<br>点右上角"新建商品"开始</p>
+        </div>
+        <div v-else-if="!filteredProducts.length" class="text-center py-8 px-2">
+          <p class="text-3xl mb-2">🔎</p>
+          <p class="text-xs text-ink/40 font-bold">没有符合条件的商品</p>
         </div>
 
         <div v-else class="flex md:flex-col gap-2 overflow-x-auto md:overflow-visible pb-1 md:pb-0">
-          <button v-for="p in products" :key="p.id" @click="currentProductId = p.id"
+          <button v-for="p in filteredProducts" :key="p.id" @click="currentProductId = p.id"
             class="btn-press shrink-0 md:shrink text-left rounded-xl px-3 py-2.5 flex items-center justify-between gap-2 min-w-[160px] md:min-w-0"
             :class="p.id === currentProductId ? 'tab-active' : 'tab-idle bg-paper/0'">
             <div class="min-w-0">
               <p class="font-bold text-sm truncate">{{ p.name }}</p>
               <p class="text-[11px] truncate" :class="p.id === currentProductId ? 'text-white/55' : 'text-ink/35'">
-                {{ p.stores.length }} 家店 <span v-if="p.decidedStoreId"> · 已决策 ✓</span>
+                <span v-if="p.category">{{ p.category }} · </span>{{ p.stores.length }} 家店 <span v-if="p.decidedStoreId"> · 已决策 ✓</span>
               </p>
             </div>
             <span v-if="p.decidedStoreId" class="text-sm shrink-0">✅</span>
@@ -128,7 +166,10 @@
         <!-- 商品标题条 -->
         <div class="panel md:rounded-2xl px-5 py-4 flex items-center justify-between gap-3 flex-wrap">
           <div class="min-w-0">
-            <h2 class="font-display font-bold text-xl sm:text-2xl text-navy truncate">{{ currentProduct.name }}</h2>
+            <h2 class="font-display font-bold text-xl sm:text-2xl text-navy truncate flex items-center gap-2">
+              {{ currentProduct.name }}
+              <span v-if="currentProduct.category" class="text-[11px] font-bold bg-navy-50 text-navy/60 px-2 py-0.5 rounded-full align-middle">{{ currentProduct.category }}</span>
+            </h2>
             <p class="text-xs text-ink/40 font-bold mt-0.5">
               <span v-if="currentProduct.decidedStoreId" class="text-win">✓ 已决策：在「{{ decidedStore?.name }}」购买</span>
               <span v-else-if="currentProduct.stores.length">{{ currentProduct.stores.length }} 家店参与对比，还没做决定</span>
@@ -136,17 +177,45 @@
             </p>
           </div>
           <div class="flex items-center gap-2 shrink-0">
-            <button @click="showNewStore = true" class="btn-press bg-navy text-white font-bold text-sm px-3.5 py-2 rounded-lg hover:bg-navy-light flex items-center gap-1.5">
+            <button @click="showWeightPanel = !showWeightPanel" class="btn-press bg-paper text-navy font-bold text-sm px-3 py-2 rounded-lg hover:bg-line/60 flex items-center gap-1.5">
+              ⚖️<span class="hidden sm:inline">评分权重</span>
+            </button>
+            <button @click="showNewStore = true; editingStoreId = null; Object.assign(storeForm, emptyStoreForm())" class="btn-press bg-navy text-white font-bold text-sm px-3.5 py-2 rounded-lg hover:bg-navy-light flex items-center gap-1.5">
               <span class="text-base leading-none">＋</span>添加对比店铺
             </button>
-            <button @click="deleteProduct(currentProduct.id)" class="text-ink/25 hover:text-rose-500 text-xs font-bold px-2">删除商品</button>
+            <button @click="deleteProduct(currentProduct.id)" class="text-ink/25 hover:text-rose text-xs font-bold px-2">删除商品</button>
           </div>
         </div>
 
-        <!-- 新增店铺表单 -->
+        <!-- 权重设置面板 -->
+        <transition name="pop">
+          <div v-if="showWeightPanel" class="panel md:rounded-2xl p-5 border-2 border-navy/10">
+            <div class="flex items-center justify-between mb-3">
+              <p class="font-display font-bold text-navy">综合推荐分 · 权重设置</p>
+              <button @click="resetWeights" class="text-[11px] font-bold text-ink/35 hover:text-navy">恢复默认</button>
+            </div>
+            <p class="text-[11px] text-ink/40 font-bold mb-4">拖动滑块调整"价格 / 口碑 / 权益"在综合推荐分中的占比，系统会自动按比例折算（无需凑成100）</p>
+            <div class="grid sm:grid-cols-3 gap-5">
+              <div>
+                <div class="flex justify-between text-xs font-bold mb-1"><span class="text-ink/60">💰 价格权重</span><span class="font-mono text-navy">{{ weightPct.price }}%</span></div>
+                <input type="range" min="0" max="100" v-model.number="weights.price" class="w-full">
+              </div>
+              <div>
+                <div class="flex justify-between text-xs font-bold mb-1"><span class="text-ink/60">⭐ 口碑权重</span><span class="font-mono text-navy">{{ weightPct.rating }}%</span></div>
+                <input type="range" min="0" max="100" v-model.number="weights.rating" class="w-full">
+              </div>
+              <div>
+                <div class="flex justify-between text-xs font-bold mb-1"><span class="text-ink/60">🎁 权益权重</span><span class="font-mono text-navy">{{ weightPct.perks }}%</span></div>
+                <input type="range" min="0" max="100" v-model.number="weights.perks" class="w-full">
+              </div>
+            </div>
+          </div>
+        </transition>
+
+        <!-- 新增/编辑店铺表单 -->
         <transition name="pop">
           <div v-if="showNewStore" class="panel md:rounded-2xl p-5 border-2 border-navy/15">
-            <p class="font-display font-bold text-navy mb-3">添加对比店铺</p>
+            <p class="font-display font-bold text-navy mb-3">{{ editingStoreId ? '编辑店铺' : '添加对比店铺' }}</p>
             <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
               <div class="col-span-2 md:col-span-1">
                 <label class="text-[11px] font-bold text-ink/40 block mb-1">店铺名字</label>
@@ -164,28 +233,61 @@
                   class="w-full rounded-lg border border-line px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-navy/40 bg-paper">
               </div>
               <div>
-                <label class="text-[11px] font-bold text-ink/40 block mb-1">综合评分</label>
+                <label class="text-[11px] font-bold text-ink/40 block mb-1">口碑评分</label>
                 <div class="flex items-center gap-0.5 px-1 py-2">
                   <button v-for="s in 5" :key="s" type="button" @click="storeForm.rating = s" class="star-btn text-xl leading-none"
                     :class="s <= storeForm.rating ? 'text-gold' : 'text-line'">★</button>
                 </div>
               </div>
             </div>
-            <div class="mb-4">
-              <label class="text-[11px] font-bold text-ink/40 block mb-1">赠品 / 权益备注</label>
-              <input v-model="storeForm.perks" type="text" placeholder="例如：送 5 年质保、包邮、赠鼠标垫"
-                class="w-full rounded-lg border border-line px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-navy/40 bg-paper">
+            <div class="grid grid-cols-2 gap-3 mb-4">
+              <div>
+                <label class="text-[11px] font-bold text-ink/40 block mb-1">权益评分 <span class="font-normal text-ink/30">(赠品/服务力度)</span></label>
+                <div class="flex items-center gap-0.5 px-1 py-2">
+                  <button v-for="s in 5" :key="s" type="button" @click="storeForm.perksScore = s" class="star-btn text-xl leading-none"
+                    :class="s <= storeForm.perksScore ? 'text-win' : 'text-line'">●</button>
+                </div>
+              </div>
+              <div>
+                <label class="text-[11px] font-bold text-ink/40 block mb-1">赠品 / 权益备注</label>
+                <input v-model="storeForm.perks" type="text" placeholder="例如：送 5 年质保、包邮"
+                  class="w-full rounded-lg border border-line px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-navy/40 bg-paper">
+              </div>
             </div>
             <div class="flex items-center justify-between bg-paper rounded-lg px-4 py-2.5 mb-4 text-sm font-bold">
               <span class="text-ink/50">到手价预览</span>
               <span class="font-mono text-lg text-navy">¥{{ ((storeForm.price||0)-(storeForm.discount||0)).toFixed(2) }}</span>
             </div>
             <div class="flex gap-2">
-              <button @click="addStore" class="btn-press flex-1 bg-navy text-white font-bold py-2.5 rounded-lg hover:bg-navy-light">保存店铺</button>
+              <button @click="saveStore" class="btn-press flex-1 bg-navy text-white font-bold py-2.5 rounded-lg hover:bg-navy-light">{{ editingStoreId ? '保存修改' : '保存店铺' }}</button>
               <button @click="cancelNewStore" class="flex-1 bg-paper text-ink/50 font-bold py-2.5 rounded-lg hover:bg-line/60">取消</button>
             </div>
           </div>
         </transition>
+
+        <!-- 决策原因 / 价格追踪 卡片（已决策时展示）-->
+        <div v-if="currentProduct.decidedStoreId" class="panel md:rounded-2xl p-5 bg-win-50/40 border border-win/20">
+          <div class="flex items-start justify-between gap-3 flex-wrap mb-2">
+            <div>
+              <p class="font-display font-bold text-win text-sm">✓ 已决策：{{ decidedStore?.name }} · ¥{{ currentProduct.decidedFinalPrice?.toFixed(2) }}</p>
+              <p class="text-[11px] text-ink/40 font-bold mt-0.5">决策于 {{ formatDate(currentProduct.decidedAt) }}</p>
+            </div>
+            <button @click="openPriceCheck" class="btn-press bg-white text-navy font-bold text-xs px-3 py-1.5 rounded-lg border border-line hover:bg-paper">🔍 复查现价</button>
+          </div>
+          <p v-if="currentProduct.decidedReason" class="text-sm text-ink/60 bg-white/70 rounded-lg px-3 py-2 mt-2">💬 {{ currentProduct.decidedReason }}</p>
+
+          <div v-if="currentProduct.priceLog?.length" class="mt-3 space-y-1.5">
+            <p class="text-[11px] font-bold text-ink/35 uppercase tracking-wide">价格追踪记录</p>
+            <div v-for="(log, i) in [...currentProduct.priceLog].reverse()" :key="i"
+              class="flex items-center justify-between text-xs bg-white/70 rounded-lg px-3 py-1.5">
+              <span class="text-ink/40 font-bold">{{ formatDate(log.date) }}</span>
+              <span class="font-mono font-bold">¥{{ log.final.toFixed(2) }}</span>
+              <span class="font-bold" :class="log.final < currentProduct.decidedFinalPrice ? 'text-rose' : 'text-win'">
+                {{ log.final < currentProduct.decidedFinalPrice ? '当时若晚买省 ¥'+(currentProduct.decidedFinalPrice-log.final).toFixed(2) : (log.final > currentProduct.decidedFinalPrice ? '涨了 ¥'+(log.final-currentProduct.decidedFinalPrice).toFixed(2)+'，还好早买了' : '价格没变') }}
+              </span>
+            </div>
+          </div>
+        </div>
 
         <!-- 对比看板：桌面端表格 -->
         <div v-if="currentProduct.stores.length" class="panel rounded-2xl overflow-hidden hidden md:block">
@@ -198,7 +300,8 @@
                 <th class="text-right font-bold px-4 py-3">优惠</th>
                 <th class="text-right font-bold px-4 py-3">到手价</th>
                 <th class="text-left font-bold px-4 py-3">赠品 / 权益</th>
-                <th class="text-center font-bold px-4 py-3">评分</th>
+                <th class="text-center font-bold px-4 py-3">口碑</th>
+                <th class="text-center font-bold px-4 py-3">推荐分</th>
                 <th class="text-center font-bold px-4 py-3">标签</th>
                 <th class="text-center font-bold px-4 py-3">操作</th>
               </tr>
@@ -217,15 +320,18 @@
                 <td class="px-4 py-3 text-right font-mono font-bold text-navy text-base">¥{{ s.final.toFixed(2) }}</td>
                 <td class="px-4 py-3 text-ink/50 max-w-[180px] truncate" :title="s.perks">{{ s.perks || '—' }}</td>
                 <td class="px-4 py-3 text-center text-gold font-bold tracking-tight">{{ '★'.repeat(s.rating) }}<span class="text-line">{{ '★'.repeat(5-s.rating) }}</span></td>
+                <td class="px-4 py-3 text-center font-mono font-bold" :class="s.isRecommended ? 'text-navy' : 'text-ink/40'">{{ s.compositePct }}</td>
                 <td class="px-4 py-3 text-center space-y-1">
                   <span v-if="s.isCheapest" class="blink-badge inline-block bg-win-50 text-win text-[11px] font-bold px-2 py-0.5 rounded-full">价格最低 💰</span>
                   <span v-if="s.isTopRated" class="block bg-gold-50 text-gold text-[11px] font-bold px-2 py-0.5 rounded-full">口碑最好 👍</span>
+                  <span v-if="s.isRecommended" class="block bg-navy-50 text-navy text-[11px] font-bold px-2 py-0.5 rounded-full">综合推荐 🏆</span>
                 </td>
                 <td class="px-4 py-3 text-center space-x-2 whitespace-nowrap">
-                  <button v-if="currentProduct.decidedStoreId !== s.id" @click="decide(s.id)"
+                  <button v-if="currentProduct.decidedStoreId !== s.id" @click="openDecideModal(s.id)"
                     class="btn-press bg-navy text-white text-xs font-bold px-3 py-1.5 rounded-lg hover:bg-navy-light">确定在这家买！</button>
                   <button v-else @click="undecide()" class="btn-press bg-paper text-ink/50 text-xs font-bold px-3 py-1.5 rounded-lg hover:bg-line/60">取消决策</button>
-                  <button @click="deleteStore(s.id)" class="text-ink/25 hover:text-rose-500 text-xs">删除</button>
+                  <button @click="openEditStore(s)" class="text-ink/35 hover:text-navy text-xs font-bold">编辑</button>
+                  <button @click="deleteStore(s.id)" class="text-ink/25 hover:text-rose text-xs">删除</button>
                 </td>
               </tr>
             </tbody>
@@ -245,12 +351,16 @@
                     <span v-if="currentProduct.decidedStoreId === s.id" class="text-win text-xs">✓已选定</span>
                   </p>
                 </div>
-                <div class="text-gold font-bold text-sm tracking-tight">{{ '★'.repeat(s.rating) }}<span class="text-line">{{ '★'.repeat(5-s.rating) }}</span></div>
+                <div class="text-right">
+                  <div class="text-gold font-bold text-sm tracking-tight">{{ '★'.repeat(s.rating) }}<span class="text-line">{{ '★'.repeat(5-s.rating) }}</span></div>
+                  <p class="text-[11px] font-mono font-bold" :class="s.isRecommended ? 'text-navy' : 'text-ink/35'">推荐分 {{ s.compositePct }}</p>
+                </div>
               </div>
 
               <div class="flex gap-2 mb-2 flex-wrap">
                 <span v-if="s.isCheapest" class="blink-badge inline-block bg-win-50 text-win text-[11px] font-bold px-2 py-0.5 rounded-full">价格最低 💰</span>
                 <span v-if="s.isTopRated" class="inline-block bg-gold-50 text-gold text-[11px] font-bold px-2 py-0.5 rounded-full">口碑最好 👍</span>
+                <span v-if="s.isRecommended" class="inline-block bg-navy-50 text-navy text-[11px] font-bold px-2 py-0.5 rounded-full">综合推荐 🏆</span>
               </div>
 
               <div class="grid grid-cols-3 gap-2 text-center bg-paper rounded-xl py-2.5 mb-2">
@@ -271,17 +381,18 @@
               <p class="text-xs text-ink/45 mb-3" v-if="s.perks">🎁 {{ s.perks }}</p>
 
               <div class="flex gap-2">
-                <button v-if="currentProduct.decidedStoreId !== s.id" @click="decide(s.id)"
+                <button v-if="currentProduct.decidedStoreId !== s.id" @click="openDecideModal(s.id)"
                   class="btn-press flex-1 bg-navy text-white text-sm font-bold py-2 rounded-lg">确定在这家买！</button>
                 <button v-else @click="undecide()" class="btn-press flex-1 bg-paper text-ink/50 text-sm font-bold py-2 rounded-lg">取消决策</button>
-                <button @click="deleteStore(s.id)" class="text-ink/25 hover:text-rose-500 text-sm px-2">删除</button>
+                <button @click="openEditStore(s)" class="text-ink/35 hover:text-navy text-sm px-2 font-bold">编辑</button>
+                <button @click="deleteStore(s.id)" class="text-ink/25 hover:text-rose text-sm px-2">删除</button>
               </div>
             </div>
           </transition-group>
         </div>
 
         <div v-if="!currentProduct.stores.length" class="panel md:rounded-2xl p-12 text-center text-ink/35 font-bold">
-          还没有对比店铺，点击上方“添加对比店铺”录入第一家
+          还没有对比店铺，点击上方"添加对比店铺"录入第一家
         </div>
       </template>
     </main>
@@ -294,7 +405,12 @@
         <h3 class="font-display font-bold text-lg text-navy mb-1">新建商品</h3>
         <p class="text-xs text-ink/40 font-bold mb-4">给想要货比三家的商品起个名字</p>
         <input v-model="newProductName" @keyup.enter="addProduct" type="text" placeholder="例如：人体工学椅" autofocus
+          class="w-full rounded-lg border border-line px-3 py-2.5 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-navy/40">
+        <input v-model="newProductCategory" list="category-list" @keyup.enter="addProduct" type="text" placeholder="分类（可选，例如：数码 / 家具）"
           class="w-full rounded-lg border border-line px-3 py-2.5 text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-navy/40">
+        <datalist id="category-list">
+          <option v-for="c in allCategories" :key="c" :value="c"></option>
+        </datalist>
         <div class="flex gap-2">
           <button @click="addProduct" class="btn-press flex-1 bg-navy text-white font-bold py-2.5 rounded-lg hover:bg-navy-light">创建</button>
           <button @click="showNewProduct=false" class="flex-1 bg-paper text-ink/50 font-bold py-2.5 rounded-lg hover:bg-line/60">取消</button>
@@ -303,46 +419,96 @@
     </div>
   </transition>
 
+  <!-- 决策原因弹层 -->
+  <transition name="fade">
+    <div v-if="decideModal.show" class="fixed inset-0 bg-ink/40 z-30 flex items-center justify-center p-4" @click.self="decideModal.show=false">
+      <div class="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+        <h3 class="font-display font-bold text-lg text-navy mb-1">确定购买</h3>
+        <p class="text-xs text-ink/40 font-bold mb-4">记录一下决策理由，以后回顾更清楚为什么选它</p>
+        <textarea v-model="decideModal.reason" rows="3" placeholder="例如：虽然贵一点，但送 5 年质保更放心（可留空）"
+          class="w-full rounded-lg border border-line px-3 py-2.5 text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-navy/40 resize-none"></textarea>
+        <div class="flex gap-2">
+          <button @click="confirmDecide" class="btn-press flex-1 bg-navy text-white font-bold py-2.5 rounded-lg hover:bg-navy-light">确认决策</button>
+          <button @click="decideModal.show=false" class="flex-1 bg-paper text-ink/50 font-bold py-2.5 rounded-lg hover:bg-line/60">取消</button>
+        </div>
+      </div>
+    </div>
+  </transition>
+
+  <!-- 复查现价弹层 -->
+  <transition name="fade">
+    <div v-if="priceCheckModal.show" class="fixed inset-0 bg-ink/40 z-30 flex items-center justify-center p-4" @click.self="priceCheckModal.show=false">
+      <div class="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+        <h3 class="font-display font-bold text-lg text-navy mb-1">复查现价</h3>
+        <p class="text-xs text-ink/40 font-bold mb-4">看看「{{ decidedStore?.name }}」现在的到手价是多少，和当时决策价对比一下</p>
+        <input v-model.number="priceCheckModal.value" type="number" min="0" step="0.01" placeholder="现在的到手价"
+          class="w-full rounded-lg border border-line px-3 py-2.5 text-sm font-mono mb-4 focus:outline-none focus:ring-2 focus:ring-navy/40">
+        <div class="flex gap-2">
+          <button @click="confirmPriceCheck" class="btn-press flex-1 bg-navy text-white font-bold py-2.5 rounded-lg hover:bg-navy-light">记录</button>
+          <button @click="priceCheckModal.show=false" class="flex-1 bg-paper text-ink/50 font-bold py-2.5 rounded-lg hover:bg-line/60">取消</button>
+        </div>
+      </div>
+    </div>
+  </transition>
+
   <!-- toast -->
   <transition name="pop">
-    <div v-if="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-navy text-white font-bold px-5 py-2.5 rounded-full shadow-xl z-50 text-sm">
+    <div v-if="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-navy text-white font-bold px-5 py-2.5 rounded-full shadow-xl z-50 text-sm max-w-[90vw] text-center">
       {{ toast }}
     </div>
   </transition>
 
   <footer class="text-center text-xs text-ink/30 font-semibold py-6">
-    数据仅保存在本机浏览器中 · 货比三家选店决策助手
+    数据仅保存在本机浏览器中 · 可用右上角"导出"备份 · 货比三家选店决策助手
   </footer>
 </div>
 
 <script>
-const { createApp, reactive, ref, computed, watch, onMounted } = Vue;
+const { createApp, reactive, ref, computed, onMounted } = Vue;
 
 createApp({
   setup(){
-    const STORAGE_KEY = 'shop-compare-data-v1';
+    const STORAGE_KEY = 'shop-compare-data-v2';
 
     const products = ref([]);
     const currentProductId = ref(null);
     const showNewProduct = ref(false);
     const newProductName = ref('');
+    const newProductCategory = ref('');
     const showNewStore = ref(false);
+    const editingStoreId = ref(null);
     const toast = ref('');
+    const searchQuery = ref('');
+    const sortMode = ref('default');
+    const categoryFilter = ref('');
+    const showWeightPanel = ref(false);
+    const fileInputRef = ref(null);
     let toastTimer = null;
 
-    const emptyStoreForm = () => ({ name:'', price:null, discount:null, perks:'', rating:5 });
+    const weights = reactive({ price: 40, rating: 30, perks: 30 });
+    const decideModal = reactive({ show:false, storeId:null, reason:'' });
+    const priceCheckModal = reactive({ show:false, value:null });
+
+    const emptyStoreForm = () => ({ name:'', price:null, discount:null, perks:'', rating:5, perksScore:3 });
     const storeForm = reactive(emptyStoreForm());
 
     function showToast(msg){
       toast.value = msg;
       clearTimeout(toastTimer);
-      toastTimer = setTimeout(()=>{ toast.value=''; }, 1700);
+      toastTimer = setTimeout(()=>{ toast.value=''; }, 2400);
+    }
+
+    function formatDate(ts){
+      if(!ts) return '';
+      const d = new Date(ts);
+      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
     }
 
     function persist(){
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
         products: products.value,
-        currentProductId: currentProductId.value
+        currentProductId: currentProductId.value,
+        weights: { ...weights }
       }));
     }
     function load(){
@@ -350,8 +516,13 @@ createApp({
         const raw = localStorage.getItem(STORAGE_KEY);
         if(raw){
           const data = JSON.parse(raw);
-          products.value = data.products || [];
+          products.value = (data.products || []).map(p => ({
+            category:'', decidedAt:null, decidedReason:'', decidedFinalPrice:null, priceLog:[],
+            ...p,
+            stores: (p.stores||[]).map(s => ({ perksScore:3, ...s }))
+          }));
           currentProductId.value = data.currentProductId || (products.value[0]?.id ?? null);
+          if(data.weights) Object.assign(weights, data.weights);
         }
       }catch(e){ console.error(e); }
     }
@@ -363,7 +534,46 @@ createApp({
       return currentProduct.value.stores.find(s => s.id === currentProduct.value.decidedStoreId) || null;
     });
 
-    // 计算到手价 + 排名 + 最低价/最高评分标签
+    const allCategories = computed(() => {
+      const set = new Set(products.value.map(p => (p.category||'').trim()).filter(Boolean));
+      return [...set];
+    });
+
+    const filteredProducts = computed(() => {
+      let list = products.value.slice();
+      if(searchQuery.value.trim()){
+        const q = searchQuery.value.trim().toLowerCase();
+        list = list.filter(p => p.name.toLowerCase().includes(q));
+      }
+      if(categoryFilter.value){
+        list = list.filter(p => p.category === categoryFilter.value);
+      }
+      if(sortMode.value === 'name'){
+        list.sort((a,b) => a.name.localeCompare(b.name, 'zh-Hans-CN'));
+      } else if(sortMode.value === 'decided'){
+        list.sort((a,b) => (b.decidedStoreId?1:0) - (a.decidedStoreId?1:0));
+      } else if(sortMode.value === 'undecided'){
+        list.sort((a,b) => (a.decidedStoreId?1:0) - (b.decidedStoreId?1:0));
+      }
+      return list;
+    });
+
+    const weightPct = computed(() => {
+      const total = (weights.price||0) + (weights.rating||0) + (weights.perks||0);
+      if(!total) return { price:0, rating:0, perks:0 };
+      return {
+        price: Math.round(weights.price/total*100),
+        rating: Math.round(weights.rating/total*100),
+        perks: Math.round(weights.perks/total*100),
+      };
+    });
+
+    function resetWeights(){
+      weights.price = 40; weights.rating = 30; weights.perks = 30;
+      persist();
+    }
+
+    // 计算到手价 + 排名 + 标签 + 综合推荐分
     const rankedStores = computed(() => {
       if(!currentProduct.value) return [];
       const list = currentProduct.value.stores.map(s => ({
@@ -371,21 +581,38 @@ createApp({
         final: (Number(s.price)||0) - (Number(s.discount)||0)
       }));
       const minFinal = Math.min(...list.map(s => s.final));
+      const maxFinal = Math.max(...list.map(s => s.final));
       const maxRating = Math.max(...list.map(s => s.rating));
+      const totalW = (weights.price||0) + (weights.rating||0) + (weights.perks||0) || 1;
+
       list.forEach(s => {
         s.isCheapest = s.final === minFinal;
         s.isTopRated = s.rating === maxRating;
+        const priceScore = maxFinal === minFinal ? 5 : (maxFinal - s.final) / (maxFinal - minFinal) * 5;
+        const ratingScore = s.rating;
+        const perksScore = s.perksScore || 0;
+        const raw = (priceScore*(weights.price||0) + ratingScore*(weights.rating||0) + perksScore*(weights.perks||0)) / totalW;
+        s.compositePct = Math.round(raw/5*100);
       });
+      const maxComposite = Math.max(...list.map(s => s.compositePct));
+      list.forEach(s => { s.isRecommended = list.length > 1 && s.compositePct === maxComposite; });
+
       return list.sort((a,b) => a.final - b.final);
     });
 
     function addProduct(){
       const name = newProductName.value.trim();
       if(!name){ showToast('请先填写商品名字～'); return; }
-      const p = { id: Date.now()+Math.random().toString(16).slice(2), name, decidedStoreId: null, stores: [] };
+      const p = {
+        id: Date.now()+Math.random().toString(16).slice(2), name,
+        category: newProductCategory.value.trim(),
+        decidedStoreId: null, decidedAt:null, decidedReason:'', decidedFinalPrice:null,
+        priceLog: [], stores: []
+      };
       products.value.push(p);
       currentProductId.value = p.id;
       newProductName.value = '';
+      newProductCategory.value = '';
       showNewProduct.value = false;
       persist();
       showToast('商品已创建，添加店铺开始比价吧！');
@@ -402,23 +629,59 @@ createApp({
 
     function cancelNewStore(){
       showNewStore.value = false;
+      editingStoreId.value = null;
       Object.assign(storeForm, emptyStoreForm());
     }
 
-    function addStore(){
+    function openEditStore(store){
+      editingStoreId.value = store.id;
+      Object.assign(storeForm, {
+        name: store.name, price: store.price, discount: store.discount,
+        perks: store.perks, rating: store.rating, perksScore: store.perksScore || 3
+      });
+      showNewStore.value = true;
+    }
+
+    function saveStore(){
       if(!currentProduct.value) return;
       if(!storeForm.name.trim()){ showToast('请填写店铺名字～'); return; }
       if(storeForm.price === null || storeForm.price === ''){ showToast('请填写商品标价～'); return; }
-      currentProduct.value.stores.push({
-        id: Date.now()+Math.random().toString(16).slice(2),
-        name: storeForm.name.trim(),
-        price: Number(storeForm.price)||0,
-        discount: Number(storeForm.discount)||0,
-        perks: storeForm.perks.trim(),
-        rating: storeForm.rating
-      });
+
+      if(editingStoreId.value){
+        const store = currentProduct.value.stores.find(s => s.id === editingStoreId.value);
+        if(store){
+          const wasDecided = currentProduct.value.decidedStoreId === store.id;
+          const oldFinal = (Number(store.price)||0) - (Number(store.discount)||0);
+          Object.assign(store, {
+            name: storeForm.name.trim(),
+            price: Number(storeForm.price)||0,
+            discount: Number(storeForm.discount)||0,
+            perks: storeForm.perks.trim(),
+            rating: storeForm.rating,
+            perksScore: storeForm.perksScore,
+          });
+          const newFinal = store.price - store.discount;
+          if(wasDecided && newFinal !== oldFinal && currentProduct.value.decidedFinalPrice != null){
+            currentProduct.value.priceLog.push({ date: Date.now(), final: newFinal });
+            const diff = currentProduct.value.decidedFinalPrice - newFinal;
+            if(diff > 0.009) showToast(`价格更新：现在到手价降到 ¥${newFinal.toFixed(2)}，比决策时低 ¥${diff.toFixed(2)}`);
+            else if(diff < -0.009) showToast(`价格更新：现在到手价涨到 ¥${newFinal.toFixed(2)}，比决策时高 ¥${(-diff).toFixed(2)}`);
+          }
+        }
+        showToast('店铺信息已更新');
+      } else {
+        currentProduct.value.stores.push({
+          id: Date.now()+Math.random().toString(16).slice(2),
+          name: storeForm.name.trim(),
+          price: Number(storeForm.price)||0,
+          discount: Number(storeForm.discount)||0,
+          perks: storeForm.perks.trim(),
+          rating: storeForm.rating,
+          perksScore: storeForm.perksScore,
+        });
+        showToast('店铺已加入对比看板');
+      }
       persist();
-      showToast('店铺已加入对比看板');
       cancelNewStore();
     }
 
@@ -426,29 +689,114 @@ createApp({
       if(!currentProduct.value) return;
       if(!confirm('确定要删除这家店铺吗？')) return;
       currentProduct.value.stores = currentProduct.value.stores.filter(s => s.id !== id);
-      if(currentProduct.value.decidedStoreId === id) currentProduct.value.decidedStoreId = null;
+      if(currentProduct.value.decidedStoreId === id){
+        currentProduct.value.decidedStoreId = null;
+        currentProduct.value.decidedReason = '';
+        currentProduct.value.decidedFinalPrice = null;
+        currentProduct.value.decidedAt = null;
+        currentProduct.value.priceLog = [];
+      }
       persist();
     }
 
-    function decide(storeId){
-      if(!currentProduct.value) return;
-      currentProduct.value.decidedStoreId = storeId;
+    function openDecideModal(storeId){
+      decideModal.storeId = storeId;
+      decideModal.reason = '';
+      decideModal.show = true;
+    }
+    function confirmDecide(){
+      if(!currentProduct.value || !decideModal.storeId) return;
+      const store = currentProduct.value.stores.find(s => s.id === decideModal.storeId);
+      currentProduct.value.decidedStoreId = decideModal.storeId;
+      currentProduct.value.decidedAt = Date.now();
+      currentProduct.value.decidedReason = decideModal.reason.trim();
+      currentProduct.value.decidedFinalPrice = store ? (store.price - store.discount) : null;
+      currentProduct.value.priceLog = [];
+      decideModal.show = false;
       persist();
       showToast('已确定购买店铺，这单就这么定了！🎉');
     }
     function undecide(){
       if(!currentProduct.value) return;
       currentProduct.value.decidedStoreId = null;
+      currentProduct.value.decidedReason = '';
+      currentProduct.value.decidedFinalPrice = null;
+      currentProduct.value.decidedAt = null;
+      currentProduct.value.priceLog = [];
       persist();
+    }
+
+    function openPriceCheck(){
+      priceCheckModal.value = null;
+      priceCheckModal.show = true;
+    }
+    function confirmPriceCheck(){
+      if(!currentProduct.value || priceCheckModal.value === null || priceCheckModal.value === '') { showToast('请填写现在的到手价～'); return; }
+      currentProduct.value.priceLog.push({ date: Date.now(), final: Number(priceCheckModal.value) });
+      const diff = currentProduct.value.decidedFinalPrice - Number(priceCheckModal.value);
+      if(diff > 0.009) showToast(`现在到手价更低了 ¥${diff.toFixed(2)}，做个记录提醒自己下次早点比价～`);
+      else if(diff < -0.009) showToast(`现在到手价涨了 ¥${(-diff).toFixed(2)}，还好当时下手早！`);
+      else showToast('价格没有变化，已记录');
+      priceCheckModal.show = false;
+      persist();
+    }
+
+    function exportData(){
+      const payload = { products: products.value, weights: {...weights}, exportedAt: new Date().toISOString() };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type:'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const d = new Date();
+      a.href = url;
+      a.download = `货比三家备份-${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      showToast('已导出备份文件');
+    }
+
+    function triggerImport(){
+      fileInputRef.value?.click();
+    }
+    function handleImportFile(e){
+      const file = e.target.files?.[0];
+      if(!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try{
+          const data = JSON.parse(reader.result);
+          if(!Array.isArray(data.products)) throw new Error('格式不正确');
+          if(!confirm(`将导入 ${data.products.length} 个商品，是否覆盖当前本机数据？`)) return;
+          products.value = data.products.map(p => ({
+            category:'', decidedAt:null, decidedReason:'', decidedFinalPrice:null, priceLog:[],
+            ...p,
+            stores: (p.stores||[]).map(s => ({ perksScore:3, ...s }))
+          }));
+          if(data.weights) Object.assign(weights, data.weights);
+          currentProductId.value = products.value[0]?.id ?? null;
+          persist();
+          showToast('数据导入成功！');
+        }catch(err){
+          showToast('导入失败：文件格式不正确');
+        }
+      };
+      reader.readAsText(file);
+      e.target.value = '';
     }
 
     onMounted(load);
 
     return {
-      products, currentProductId, currentProduct, decidedStore, rankedStores,
-      showNewProduct, newProductName, addProduct, deleteProduct,
-      showNewStore, storeForm, addStore, cancelNewStore, deleteStore,
-      decide, undecide, toast,
+      products, currentProductId, currentProduct, decidedStore, rankedStores, allCategories, filteredProducts,
+      searchQuery, sortMode, categoryFilter,
+      showNewProduct, newProductName, newProductCategory, addProduct, deleteProduct,
+      showNewStore, editingStoreId, storeForm, emptyStoreForm, saveStore, cancelNewStore, openEditStore, deleteStore,
+      decideModal, openDecideModal, confirmDecide, undecide,
+      priceCheckModal, openPriceCheck, confirmPriceCheck,
+      showWeightPanel, weights, weightPct, resetWeights,
+      exportData, triggerImport, handleImportFile, fileInputRef,
+      formatDate, toast,
     };
   }
 }).mount('#app');
